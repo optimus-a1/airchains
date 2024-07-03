@@ -1,56 +1,5 @@
 #!/bin/bash
 
-# 定义要创建的脚本的名称
-script_name="check.sh"
-
-# 定义要写入的脚本内容
-script_content='#!/bin/bash
-
-# 定义服务名称
-service_name="tracksd"
-
-# 重启并启用服务的函数
-restart_and_enable_service() {
-    echo "发现错误。正在启用并重启 $service_name..."
-    systemctl enable $service_name
-    systemctl restart $service_name
-    if [ $? -eq 0 ]; then
-        echo "$service_name 已成功重启。"
-    else
-        echo "重启 $service_name 失败。请检查服务状态。"
-    fi
-}
-
-# 检查最近的日志条目是否包含指定的错误
-error_found=$(journalctl -u $service_name -n 50 | grep -E "incorrect pod number|rpc error")
-
-if [ -n "$error_found" ]; then
-    restart_and_enable_service
-else
-    echo "没有检测到错误。"
-fi
-
-echo "程序执行完毕，即将退出。"
-exit 0
-'
-
-# 创建脚本文件并写入内容
-echo "$script_content" > $script_name
-
-# 赋予执行权限
-chmod +x $script_name
-
-echo "脚本 $script_name 创建并赋予执行权限成功。"
-
-
-echo "*/10 * * * * /check.sh" | crontab -
-
-crontab -l
-
-# 提示按任意键继续
-read -n 1 -s -r -p "把助记词和内容保存和对air地址进行领水操作后按任意键继续..."
-
-
 # 检查是否以root用户运行脚本
 if [ "$(id -u)" != "0" ]; then
     echo "此脚本需要以root用户权限运行。"
