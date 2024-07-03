@@ -1,3 +1,4 @@
+
 #!/bin/bash
 
 # 检查是否以root用户运行脚本
@@ -25,7 +26,7 @@ echo "export PATH=\$PATH:/usr/local/go/bin" >> /etc/profile && source /etc/profi
 go version
 
 
-#安装检错重启脚本，并设定10分检查一次
+#安装检错重启脚本
 # 定义要创建的脚本的名称
 script_name="check.sh"
 
@@ -48,7 +49,7 @@ restart_and_enable_service() {
 }
 
 # 检查最近的日志条目是否包含指定的错误
-error_found=$(journalctl -u $service_name -n 50 | grep -E "incorrect pod number|rpc error")
+error_found=$(journalctl -u $service_name -n 50 | grep -E "incorrect pod number|rpc error|Failed to get transaction by hash: not found")
 
 if [ -n "$error_found" ]; then
     restart_and_enable_service
@@ -68,10 +69,15 @@ chmod +x $script_name
 
 echo "脚本 $script_name 创建并赋予执行权限成功。"
 
+#在后台运行检查出错脚本
+nohup bash check.sh &
 
-echo "*/10 * * * * /check.sh" | crontab -
 
-crontab -l
+#如果要查看看日志执行cat nohup.out
+
+
+
+
 
 # 提示按任意键继续
 read -n 1 -s -r -p "按任意键继续..."
