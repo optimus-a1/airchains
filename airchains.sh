@@ -48,10 +48,28 @@ restart_and_enable_service() {
     fi
 }
 
+# 停止服务并执行回滚的函数
+stop_and_rollback_service() {
+    echo "发现 invalid request 错误。正在停止 $service_name 并执行回滚..."
+    systemctl stop $service_name
+    /data/airchains/tracks/build/tracks rollback
+    /data/airchains/tracks/build/tracks rollback
+    /data/airchains/tracks/build/tracks rollback
+    systemctl restart $service_name
+    if [ $? -eq 0 ]; then
+        echo "$service_name 已成功重启。"
+    else
+        echo "重启 $service_name 失败。请检查服务状态。"
+    fi
+}
+
 # 检查最近的日志条目是否包含指定的错误
 error_found=$(journalctl -u $service_name -n 50 | grep -E "incorrect pod number|rpc error|Failed to get transaction by hash: not found")
+invalid_request_found=$(journalctl -u $service_name -n 50 | grep -E "invalid request \[cosmos/cosmos-sdk@v0.50.3/baseapp/baseapp.go:991\] with gas used")
 
-if [ -n "$error_found" ]; then
+if [ -n "$invalid_request_found" ]; then
+    stop_and_rollback_service
+elif [ -n "$error_found" ]; then
     restart_and_enable_service
 else
     echo "没有检测到错误。"
