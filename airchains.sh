@@ -87,15 +87,6 @@ chmod +x $script_name
 
 echo "脚本 $script_name 创建并赋予执行权限成功。"
 
-#在后台运行检查出错脚本
-nohup bash check.sh &
-
-
-#如果要查看看日志执行cat nohup.out
-
-
-
-
 
 # 提示按任意键继续
 read -n 1 -s -r -p "按任意键继续..."
