@@ -17,11 +17,12 @@ while true; do python3 send.py; sleep 1; done
 
 
 设定定时出错检查并进行重启和回滚
+
 #添加定时
 crontab -e
 
 #设定每十分钟检查一次
-echo "*/10 * * * * /root/check.sh" | crontab -
+*/10 * * * * /root/check.sh" | crontab -
 
 #查看定时任务清单
 crontab -l
