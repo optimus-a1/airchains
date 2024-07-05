@@ -198,11 +198,6 @@ systemctl daemon-reload && systemctl enable evmosd
 
 systemctl restart evmosd
 
-# 查看服务状态
-systemctl status evmosd.service
-
-# 提示按任意键继续
-read -n 1 -s -r -p "按任意键继续..."
 
 # 使用eigenlayer作为DA
 wget https://github.com/airchains-network/tracks/releases/download/v0.0.2/eigenlayer
