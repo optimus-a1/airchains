@@ -13,7 +13,7 @@ while true; do python3 send.py; sleep 1; done
 
 
 
-执行后按Ctrl+A+A退出
+执行后按Ctrl+A+D退出
 
 
 设定定时出错检查并进行重启和回滚
