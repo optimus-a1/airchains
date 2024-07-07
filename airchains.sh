@@ -237,7 +237,7 @@ export bootstrapNode
 
 /data/airchains/tracks/build/tracks prover v1EVM
 
-/data/airchains/tracks/build/tracks create-station --accountName $id --accountPath $HOME/.tracks/junction-accounts/keys --jsonRPC "https://airchains-rpc.kubenode.xyz/" --info "EVM Track" --tracks "$add" --bootstrapNode "$bootstrapNode"
+/data/airchains/tracks/build/tracks create-station --accountName $id --accountPath $HOME/.tracks/junction-accounts/keys --jsonRPC "https://airchains-rpc.sbgid.com/" --info "EVM Track" --tracks "$add" --bootstrapNode "$bootstrapNode"
 
 # 创建systemd守护程序
 cat > /etc/systemd/system/tracksd.service << EOF
