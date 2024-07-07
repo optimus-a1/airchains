@@ -139,6 +139,22 @@ https://junction-rpc.validatorvn.com/
 
 
 
+手动回滚
+systemctl stop tracksd
+
+
+/data/airchains/tracks/build/tracks rollback
+
+
+/data/airchains/tracks/build/tracks rollback
+
+
+/data/airchains/tracks/build/tracks rollback
+
+
+systemctl restart tracksd
+
+
 
 
 
