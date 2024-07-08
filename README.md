@@ -38,10 +38,33 @@ crontab -l
 
 
 
-更换rpc
+手动更换rpc
+
+
+#把其中的JunctionRPC:"改为rpc网址"改为下面导入小青蛙钱包测试通过的rpc网址
+
 
 vim ~/.tracks/config/sequencer.toml
 
+#用指令更改rpc
+
+#备份配置文件
+
+
+cp ~/.tracks/config/sequencer.toml ~/.tracks/config/sequencer.toml.bak
+
+
+#更改配置文件
+
+sed -i 's|JunctionRPC = "https://airchains-rpc.kubenode.xyz/"|JunctionRPC = "https://airchains-rpc.sbgid.com/"|' ~/.tracks/config/sequencer.toml
+
+#重新启动tracksd
+
+
+systemctl enable tracksd
+
+
+systemctl restart tracksd
 
 
 
