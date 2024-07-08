@@ -138,7 +138,7 @@ sender_address = "${address}"  # 发送者钱包地址
 sender_private_key = "${key}"  # 发送者钱包的私钥
 
 # 接收者钱包地址和转账金额（以最小单位表示）
-receiver_address = ""  # 接收者钱包地址
+receiver_address = "${address}"  # 接收者钱包地址
 amount = 1000000000000000000  # 转账金额（示例为 1个币）
 
 # 创建 Web3 实例
@@ -229,13 +229,19 @@ read -n 1 -s -r -p "把助记词和内容保存和对air地址进行领水操作
 read -p "输入你刚才备份的air地址: " add
 export add
 
+
+# 运行Prover组件
+/data/airchains/tracks/build/tracks prover v1EVM
+
+
+
 # 获取bootstrapNode值
 nodeid=$(grep "node_id" ~/.tracks/config/sequencer.toml | awk -F '"' '{print $2}')
 ip=$(curl -s4 ifconfig.me/ip)
 bootstrapNode="/ip4/$ip/tcp/2300/p2p/$nodeid"
 export bootstrapNode
 
-/data/airchains/tracks/build/tracks prover v1EVM
+
 
 /data/airchains/tracks/build/tracks create-station --accountName $id --accountPath $HOME/.tracks/junction-accounts/keys --jsonRPC "https://airchains-rpc.sbgid.com/" --info "EVM Track" --tracks "$add" --bootstrapNode "$bootstrapNode"
 
