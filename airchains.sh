@@ -25,66 +25,272 @@ echo "export PATH=\$PATH:/usr/local/go/bin" >> /etc/profile && source /etc/profi
 go version
 
 
-#安装检错重启脚本
-# 定义要创建的脚本的名称
-script_name="check.sh"
+#安装日志检查监控脚本
 
-# 定义要写入的脚本内容
-script_content='#!/bin/bash
+# 提示用户选择功能
+echo "请选择要安装的监控脚本："
+echo "1. 安装发送信息到钉钉的监控脚本"
+echo "2. 安装不发送信息到钉钉的监控脚本"
+read choice
 
-# 定义服务名称
-service_name="tracksd"
+case $choice in
+  1)
+    # 安装发送信息到钉钉的监控脚本
+    echo "正在安装发送信息到钉钉的监控脚本..."
 
-# 重启并启用服务的函数
-restart_and_enable_service() {
-    echo "发现错误。正在启用并重启 $service_name..."
-    systemctl enable $service_name
-    systemctl restart $service_name
-    if [ $? -eq 0 ]; then
-        echo "$service_name 已成功重启。"
-    else
-        echo "重启 $service_name 失败。请检查服务状态。"
-    fi
+    # 提示用户输入webhook，并将输入存储在变量 webhook 中
+    read -p "输入你的钉钉机器人的webhook: " webhook
+
+    # 提示用户输入钉钉加签秘钥，并将输入存储在变量 mkey 中
+    read -p "输入你的钉钉机器人的加签秘钥: " mkey
+
+    # 写入脚本的内容
+    content=$(cat <<EOF
+#!/bin/bash
+
+# 钉钉机器人 WebHook URL 和密钥
+WEBHOOK_URL="$webhook"
+SECRET="$mkey"
+
+# 定义检查关键词
+KEYWORDS=("Success")
+# 定义检查时间段（秒）每次执行时查询60秒内的日志有没有出现过关键词
+CHECK_INTERVAL=60
+# 定义脚本运行间隔时间（秒），脚本每60秒执行一次
+SCRIPT_INTERVAL=60
+# 定义180秒检查时间段（秒）180秒内没日志就重启
+EXTENDED_CHECK_INTERVAL=180
+
+LOG_FILE="/root/monitor.log"
+
+# 计算签名
+calculate_signature() {
+    local timestamp=\$(date "+%s%3N")
+    local secret="\$SECRET"
+    local string_to_sign="\${timestamp}\n\${secret}"
+    local sign=\$(echo -ne "\${string_to_sign}" | openssl dgst -sha256 -hmac "\${secret}" -binary | base64)
+    echo "\${timestamp}&\${sign}"
 }
 
-# 停止服务并执行回滚的函数
-stop_and_rollback_service() {
-    echo "发现 invalid request 错误。正在停止 $service_name 并执行回滚..."
-    systemctl stop $service_name
-    /data/airchains/tracks/build/tracks rollback
-    /data/airchains/tracks/build/tracks rollback
-    /data/airchains/tracks/build/tracks rollback
-    systemctl restart $service_name
-    if [ $? -eq 0 ]; then
-        echo "$service_name 已成功重启。"
-    else
-        echo "重启 $service_name 失败。请检查服务状态。"
-    fi
+# 发送钉钉消息
+send_dingtalk_message() {
+    local message=\$1
+    local sign=\$(calculate_signature)
+    local url="\${WEBHOOK_URL}&timestamp=\$(echo \${sign} | cut -d'&' -f1)&sign=\$(echo \${sign} | cut -d'&' -f2)"
+
+    # 添加当前时间到消息内容中
+    local current_time=\$(TZ="Asia/Shanghai" date "+%Y-%m-%d %H:%M:%S")
+    local message_with_time="\${current_time} - $id - \${message}"
+
+    echo "发送钉钉消息: \${message_with_time}" >> "\$LOG_FILE"
+
+    curl -s -X POST "\${url}" \
+        -H "Content-Type: application/json" \
+        -d "{\"msgtype\": \"text\", \"text\": {\"content\": \"\${message_with_time}\"}}"
 }
 
-# 检查最近的日志条目是否包含指定的错误
-error_found=$(journalctl -u $service_name -n 50 | grep -E "incorrect pod number|rpc error|Failed to get transaction by hash: not found")
-invalid_request_found=$(journalctl -u $service_name -n 50 | grep -E "invalid request \[cosmos/cosmos-sdk@v0.50.3/baseapp/baseapp.go:991\] with gas used")
+# 初始化上次检查时间 简单理解就是上次出现success的时间（脚本执行时查到有日志的时间，和当前时间比较超过EXTENDED_CHECK_INTERVAL就重启）
+LAST_EXTENDED_CHECK=\$(date +%s)
+# 重启标识把，查到有succes就重置，重启就会+1 直到重启三次就执行回滚
+RESTART_COUNT=0
 
-if [ -n "$invalid_request_found" ]; then
-    stop_and_rollback_service
-elif [ -n "$error_found" ]; then
-    restart_and_enable_service
-else
-    echo "没有检测到错误。"
-fi
+while true; do
+    echo "开始查询" >> "\$LOG_FILE"
+    current_time=\$(TZ="Asia/Shanghai" date "+%Y-%m-%d %H:%M:%S")
+    echo "\$current_time - 开始查询" >> "\$LOG_FILE"
 
-echo "程序执行完毕，即将退出。"
-exit 0
-'
+    # 检查日志内容
+    MATCH_FOUND=0
+    LOGS=\$(journalctl -u tracksd -o cat --since "\${CHECK_INTERVAL} seconds ago" --until "now")
 
-# 创建脚本文件并写入内容
-echo "$script_content" > $script_name
+    if [ -z "\$LOGS" ]; then
+        # 如果没有任何日志输出，则直接发送消息
+        MESSAGE="No log entries found in the last check interval"
+        echo "\$current_time - \$MESSAGE" >> "\$LOG_FILE"
+        send_dingtalk_message "\$MESSAGE"
+    else
+        echo "\$current_time - 检查到的日志:" >> "\$LOG_FILE"
+        echo "\$LOGS" >> "\$LOG_FILE"
+        while IFS= read -r line; do
+            MESSAGE="\$line"
+            for keyword in "\${KEYWORDS[@]}"; do
+                if echo "\$MESSAGE" | grep -q "\$keyword"; then
+                    MATCH_FOUND=1
+                    echo "\$current_time - 找到匹配的关键词: \$keyword" >> "\$LOG_FILE"
+                    LAST_EXTENDED_CHECK=\$(date +%s) # 更新上次找到关键词的时间
+                    RESTART_COUNT=0 # 重置重启计数器
+                    break 2
+                fi
+            done
+        done <<< "\$LOGS"
 
-# 赋予执行权限
-chmod +x $script_name
+        # 如果未找到匹配的日志行，则发送钉钉消息
+        if [ \$MATCH_FOUND -eq 0 ]; then
+            MESSAGE="No 'Successfully' or 'Success' found in the last check interval"
+            echo "\$current_time - \$MESSAGE" >> "\$LOG_FILE"
+            send_dingtalk_message "\$MESSAGE"
+        fi
+    fi
 
-echo "脚本 $script_name 创建并赋予执行权限成功。"
+    # 检查是否超过180秒没有找到关键词
+    current_timestamp=\$(date +%s)
+    time_diff=\$((current_timestamp - LAST_EXTENDED_CHECK))
+    if [ \$time_diff -ge \$EXTENDED_CHECK_INTERVAL ]; then
+        echo "\$current_time - 超过180秒没有找到关键词，执行重启命令" >> "\$LOG_FILE"
+        
+        # 增加重启计数器
+        RESTART_COUNT=\$((RESTART_COUNT + 1))
+        
+        if [ \$RESTART_COUNT -lt 3 ]; then
+            systemctl restart tracksd
+            send_dingtalk_message "超过180秒没有找到关键词，执行重启命令 (第\${RESTART_COUNT}次)"
+        else
+            # 连续三次重启后执行特定操作
+            sudo systemctl stop tracksd
+           
+            /data/airchains/tracks/build/tracks rollback
+            /data/airchains/tracks/build/tracks rollback
+            /data/airchains/tracks/build/tracks rollback
+            systemctl restart tracksd
+            send_dingtalk_message "连续三次重启后执行特定操作"
+            RESTART_COUNT=0 # 重置重启计数器
+        fi
+        
+        LAST_EXTENDED_CHECK=\$(date +%s) # 重置检查时间
+    fi
+
+    # 等待一段时间后再次检查
+    sleep \$SCRIPT_INTERVAL
+done
+EOF
+)
+
+    # 创建脚本文件并写入内容
+    echo "$content" > /root/dindin.sh
+
+    # 赋予执行权限
+    chmod +x /root/dindin.sh
+
+    echo "脚本 dindin.sh 创建并赋予执行权限成功。"
+
+    nohup /root/dindin.sh &
+
+    echo "脚本dindin.sh 在后台执行成功，查看运行日志执行 tail -f /root/monitor.log 指令。"
+
+    echo "发送信息到钉钉的监控脚本安装完成。"
+    ;;
+  2)
+    # 安装不发送信息到钉钉的监控脚本
+    echo "正在安装不发送信息到钉钉的监控脚本..."
+    # 这里插入安装不发送信息到钉钉的监控脚本的命令
+
+    # 写入要创建的脚本内容
+    content=$(cat <<'EOF'
+#!/bin/bash
+
+# 定义检查关键词
+KEYWORDS=("Success")
+# 定义检查时间段（秒）每次执行时查询60秒内的日志有没有出现过关键词
+CHECK_INTERVAL=60
+# 定义脚本运行间隔时间（秒），脚本每60秒执行一次
+SCRIPT_INTERVAL=60
+# 定义180秒检查时间段（秒）180秒内没日志就重启
+EXTENDED_CHECK_INTERVAL=180
+
+LOG_FILE="/root/monitor.log"
+
+# 初始化上次检查时间 简单理解就是上次出现success的时间（脚本执行时查到有日志的时间，和当前时间比较超过EXTENDED_CHECK_INTERVAL就重启）
+LAST_EXTENDED_CHECK=$(date +%s)
+# 重启标识把，查到有succes就重置，重启就会+1 直到重启三次就执行回滚
+RESTART_COUNT=0
+
+while true; do
+    echo "开始查询" >> "$LOG_FILE"
+    current_time=$(TZ="Asia/Shanghai" date "+%Y-%m-%d %H:%M:%S")
+    echo "$current_time - 开始查询" >> "$LOG_FILE"
+
+    # 检查日志内容
+    MATCH_FOUND=0
+    LOGS=$(journalctl -u tracksd -o cat --since "${CHECK_INTERVAL} seconds ago" --until "now")
+
+    if [ -z "$LOGS" ]; then
+        # 如果没有任何日志输出，则直接记录消息
+        MESSAGE="No log entries found in the last check interval"
+        echo "$current_time - $MESSAGE" >> "$LOG_FILE"
+    else
+        echo "$current_time - 检查到的日志:" >> "$LOG_FILE"
+        echo "$LOGS" >> "$LOG_FILE"
+        while IFS= read -r line; do
+            MESSAGE="$line"
+            for keyword in "${KEYWORDS[@]}"; do
+                if echo "$MESSAGE" | grep -q "$keyword"; then
+                    MATCH_FOUND=1
+                    echo "$current_time - 找到匹配的关键词: $keyword" >> "$LOG_FILE"
+                    LAST_EXTENDED_CHECK=$(date +%s) # 更新上次找到关键词的时间
+                    RESTART_COUNT=0 # 重置重启计数器
+                    break 2
+                fi
+            done
+        done <<< "$LOGS"
+
+        # 如果未找到匹配的日志行，则记录消息
+        if [ $MATCH_FOUND -eq 0 ]; then
+            MESSAGE="No 'Successfully' or 'Success' found in the last check interval"
+            echo "$current_time - $MESSAGE" >> "$LOG_FILE"
+        fi
+    fi
+
+    # 检查是否超过180秒没有找到关键词
+    current_timestamp=$(date +%s)
+    time_diff=$((current_timestamp - LAST_EXTENDED_CHECK))
+    if [ $time_diff -ge $EXTENDED_CHECK_INTERVAL ]; then
+        echo "$current_time - 超过180秒没有找到关键词，执行重启命令" >> "$LOG_FILE"
+        
+        # 增加重启计数器
+        RESTART_COUNT=$((RESTART_COUNT + 1))
+        
+        if [ $RESTART_COUNT -lt 3 ]; then
+            systemctl restart tracksd
+            echo "$current_time - 超过180秒没有找到关键词，执行重启命令 (第${RESTART_COUNT}次)" >> "$LOG_FILE"
+        else
+            # 连续三次重启后执行特定操作
+            sudo systemctl stop tracksd
+           
+            /data/airchains/tracks/build/tracks rollback
+            /data/airchains/tracks/build/tracks rollback
+            /data/airchains/tracks/build/tracks rollback
+            systemctl restart tracksd
+            echo "$current_time - 连续三次重启后执行特定操作" >> "$LOG_FILE"
+            RESTART_COUNT=0 # 重置重启计数器
+        endif
+        
+        LAST_EXTENDED_CHECK=$(date +%s) # 重置检查时间
+    fi
+
+    # 等待一段时间后再次检查
+    sleep $SCRIPT_INTERVAL
+done
+EOF
+)
+
+    # 创建脚本文件并写入内容
+    echo "$content" > /root/check.sh
+
+    # 赋予执行权限
+    chmod +x /root/check.sh
+
+    echo "脚本check.sh创建并赋予执行权限成功。"
+
+    nohup /root/check.sh &
+
+    echo "脚本check.sh在后台执行成功，查看运行日志执行 tail -f /root/monitor.log 指令。"
+
+    echo "不发送信息到钉钉的监控脚本安装完成。"
+    ;;
+  *)
+    echo "无效选项。请重新运行脚本并选择1或2。"
+    ;;
+esac
 
 
 # 提示按任意键继续
