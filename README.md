@@ -172,7 +172,37 @@ systemctl restart tracksd
 
 
 
+#老版本安装钉钉日志
 
+
+#册除老的日志监控脚本
+
+
+rm -r check.sh
+
+#下载钉钉监控日志
+
+wget -O dindin.sh https://raw.githubusercontent.com/optimus-a1/airchains/main/dindin.sh && chmod +x dingding.sh
+
+
+#修改脚本的中你钉钉的内空和你服务器名称
+
+
+vim dindin.sh
+
+
+#在后台运行钉钉监控脚本
+
+
+nohup /root/dindin.sh &
+
+
+
+#查看脚本运行日志，退出按ctrl+c
+
+
+
+tail -f /root/monitor.log
 
 
 
