@@ -32,7 +32,7 @@ send_dingtalk_message() {
 
     # 添加当前时间到消息内容中
     local current_time=$(TZ="Asia/Shanghai" date "+%Y-%m-%d %H:%M:%S")
-    local message_with_time="${current_time} - 可替换为你的服务器表示吧如哪一台 - ${message}"
+    local message_with_time="${current_time} - 改为你的节点名称 - ${message}"
 
     echo "发送钉钉消息: ${message_with_time}" >> "$LOG_FILE"
 
