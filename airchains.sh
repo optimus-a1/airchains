@@ -1,4 +1,3 @@
-
 #!/bin/bash
 
 # 检查是否以root用户运行脚本
@@ -221,12 +220,40 @@ cd /data/airchains/tracks/ && make build
 # 使用eigenlayer作da的初始化命令
 /data/airchains/tracks/build/tracks init --daRpc "disperser-holesky.eigenda.xyz" --daKey "$pkey" --daType "eigen" --moniker "$id" --stationRpc "http://127.0.0.1:8545" --stationAPI "http://127.0.0.1:8545" --stationType "evm"
 
-/data/airchains/tracks/build/tracks keys junction --accountName $id --accountPath $HOME/.tracks/junction-accounts/keys
+
+
+
+# 提示用户选择功能
+echo "请选择功能："
+echo "1. 创建新的钱包"
+echo "2. 导入助记词"
+read choice
+
+case $choice in
+  1)
+    # 创建钱包，生成私钥和公钥
+    echo "正在创建钱包..."
+    /data/airchains/tracks/build/tracks keys junction --accountName $id --accountPath $HOME/.tracks/junction-accounts/keys
+    echo "钱包创建完成，把助记词和输出的内容保存。"
+    ;;
+  2)
+    # 导入助记词
+    echo "请输入您的助记词："
+    read mnemonic
+    echo "正在导入助记词..."
+    go run cmd/main.go keys import --accountName $id --accountPath $HOME/.tracks/junction-accounts/keys --mnemonic "$mnemonic"
+    echo "助记词已成功导入。"
+    ;;
+  *)
+    echo "无效选项。请重新运行脚本并选择1或2。"
+    ;;
+esac
+
 
 # 提示按任意键继续
-read -n 1 -s -r -p "把助记词和内容保存和对air地址进行领水操作后按任意键继续..."
+read -n 1 -s -r -p "把air地址进行领水操作后按任意键继续..."
 
-read -p "输入你刚才备份的air地址: " add
+read -p "输入您的air地址: " add
 export add
 
 
