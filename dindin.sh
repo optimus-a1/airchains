@@ -47,7 +47,7 @@ daily_report() {
     local current_minute=$(date "+%M")
 
     if [[ "$current_hour" == "06" || "$current_hour" == "18" ]] && [[ "$current_minute" == "00" ]]; then
-        send_dingtalk_message "我是（替换成你的节点名称）向你报告"
+        send_dingtalk_message "向你报告"
     fi
 }
 
