@@ -54,6 +54,9 @@ SECRET="$mkey"
 
 # 定义检查关键词
 KEYWORDS=("Success")
+# 特定日志消息关键词
+CRITICAL_KEYWORD="cosmos/cosmos-sdk@v0.50.3/baseapp/baseapp"
+CRITICAL_COUNT=0  # 追踪特定日志的出现次数
 # 定义检查时间段（秒）每次执行时查询60秒内的日志有没有出现过关键词
 CHECK_INTERVAL=60
 # 定义脚本运行间隔时间（秒），脚本每60秒执行一次
@@ -133,6 +136,20 @@ while true; do
                     break 2
                 fi
             done
+
+            # 检查特定日志消息
+            if echo "$MESSAGE" | grep -q "$CRITICAL_KEYWORD"; then
+                CRITICAL_COUNT=$((CRITICAL_COUNT + 1))
+                echo "$current_time - 特定日志消息出现次数: $CRITICAL_COUNT" >> "$LOG_FILE"
+                if [ $CRITICAL_COUNT -ge 3 ]; then
+                    # 执行特定操作
+                    sudo systemctl stop tracksd
+                    /data/airchains/tracks/build/tracks rollback
+                    systemctl restart tracksd
+                    send_dingtalk_message "特定错误累计出现三次，已执行重启"
+                    CRITICAL_COUNT=0  # 重置计数器
+                fi
+            fi
         done <<< "\$LOGS"
 
         # 如果未找到匹配的日志行，则发送钉钉消息
