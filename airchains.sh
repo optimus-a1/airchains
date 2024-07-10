@@ -107,12 +107,72 @@ while true; do
     current_time=$(TZ="Asia/Shanghai" date "+%Y-%m-%d %H:%M:%S")
     echo "$current_time - 开始查询" >> "$LOG_FILE"
 
+    # 检查日志内容
+    MATCH_FOUND=0
+    LOGS=$(journalctl -u tracksd -o cat --since "${CHECK_INTERVAL} seconds ago" --until "now")
+
+    if [ -z "$LOGS" ]; then
+        # 如果没有任何日志输出，则直接发送消息
+        MESSAGE="No log entries found in the last check interval"
+        echo "$current_time - $MESSAGE" >> "$LOG_FILE"
+        send_dingtalk_message "$MESSAGE"
+    else
+        echo "$current_time - 检查到的日志:" >> "$LOG_FILE"
+        echo "$LOGS" >> "$LOG_FILE"
+        while IFS= read -r line; do
+            MESSAGE="$line"
+            for keyword in "${KEYWORDS[@]}"; do
+                if echo "$MESSAGE" | grep -q "$keyword"; then
+                    MATCH_FOUND=1
+                    echo "$current_time - 找到匹配的关键词: $keyword" >> "$LOG_FILE"
+                    LAST_EXTENDED_CHECK=$(date +%s) # 更新上次找到关键词的时间
+                    RESTART_COUNT=0 # 重置重启计数器
+                    break 2
+                fi
+            done
+        done <<< "$LOGS"
+
+        # 如果未找到匹配的日志行，则发送钉钉消息
+        if [ $MATCH_FOUND -eq 0 ]; then
+            MESSAGE="No 'Successfully' or 'Success' found in the last check interval"
+            echo "$current_time - $MESSAGE" >> "$LOG_FILE"
+            send_dingtalk_message "$MESSAGE"
+        fi
+    fi
+
+    # 检查是否超过180秒没有找到关键词
+    current_timestamp=$(date +%s)
+    time_diff=$((current_timestamp - LAST_EXTENDED_CHECK))
+    if [ $time_diff -ge $EXTENDED_CHECK_INTERVAL ]; then
+        echo "$current_time - 超过180秒没有找到关键词，执行重启命令" >> "$LOG_FILE"
+        
+        # 增加重启计数器
+        RESTART_COUNT=$((RESTART_COUNT + 1))
+        
+        if [ $RESTART_COUNT -lt 3 ]; then
+            systemctl restart tracksd
+            send_dingtalk_message "超过180秒没有找到关键词，执行重启命令 (第${RESTART_COUNT}次)"
+        else
+            # 连续三次重启后执行特定操作
+            sudo systemctl stop tracksd
+           
+            /data/airchains/tracks/build/tracks rollback
+            /data/airchains/tracks/build/tracks rollback
+            /data/airchains/tracks/build/tracks rollback
+            systemctl restart tracksd
+            send_dingtalk_message "连续三次重启后执行特定操作"
+            RESTART_COUNT=0 # 重置重启计数器
+        fi
+        
+        LAST_EXTENDED_CHECK=$(date +%s) # 重置检查时间
+    fi
+
     daily_report  # 调用每日报告函数
 
-    # 其他代码与上述相同，此处略去以节省空间
-
+    # 等待一段时间后再次检查
     sleep $SCRIPT_INTERVAL
 done
+
 EOF
 )
 
