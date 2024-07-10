@@ -172,7 +172,6 @@ while true; do
     # 等待一段时间后再次检查
     sleep $SCRIPT_INTERVAL
 done
-
 EOF
 )
 
