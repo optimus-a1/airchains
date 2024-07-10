@@ -15,6 +15,8 @@ while true; do python3 send.py; sleep 1; done
 
 执行后按Ctrl+A+D退出
 
+20240710更新钉钉每天早上6点和下午报到，没有报告的请人工进行检查是否停止工作
+
 
 20240709更新日志监控脚本，可以发送信息到钉钉,脚本修改WeiLao大哥的脚本，WeiLao大哥教程连接https://medium.com/@weilao0113/%E5%AE%9A%E6%97%B6%E7%9B%91%E6%8E%A7airchains-station-%E6%8C%82%E4%BA%86%E6%97%B6%E5%8F%91%E9%80%81%E9%92%89%E9%92%89%E6%8E%A8%E9%80%81-bcff4bffab26
 
