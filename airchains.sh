@@ -55,7 +55,7 @@ SECRET="$mkey"
 # 定义检查关键词
 KEYWORDS=("Success")
 # 特定日志消息关键词
-CRITICAL_KEYWORD="cosmos/cosmos-sdk@v0.50.3/baseapp/baseapp"
+CRITICAL_KEYWORD="cosmos/cosmos-sdk@"
 CRITICAL_COUNT=0  # 追踪特定日志的出现次数
 # 定义检查时间段（秒）每次执行时查询60秒内的日志有没有出现过关键词
 CHECK_INTERVAL=60
