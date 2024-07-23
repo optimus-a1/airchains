@@ -15,6 +15,25 @@ while true; do python3 send.py; sleep 1; done
 
 执行后按Ctrl+A+D退出
 
+
+202407023升级最新版本
+
+git clone https://github.com/airchains-network/tracks.git 
+
+
+cd tracks/ &&  make build 
+
+
+systemctl stop tracksd
+
+
+cp ./build/tracks /data/airchains/tracks/build/tracks
+
+
+systemctl restart tracksd
+
+
+
 20240710更新钉钉每天早上6点和下午报到，没有报告的请人工进行检查是否停止工作
 
 
