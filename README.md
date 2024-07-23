@@ -16,7 +16,7 @@ while true; do python3 send.py; sleep 1; done
 执行后按Ctrl+A+D退出
 
 
-202407023升级最新版本
+202407023升级最新版本(在7月23日前安装的可升级，7月23日后安装的不用升级，观察分数正常增长，也可以不升级）
 
 git clone https://github.com/airchains-network/tracks.git 
 
