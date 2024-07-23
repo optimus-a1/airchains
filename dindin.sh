@@ -1,11 +1,14 @@
 #!/bin/bash
 
 # 钉钉机器人 WebHook URL 和密钥
-WEBHOOK_URL="替换为你的WEBHOO"
-SECRET="替换为你的密匙"
+WEBHOOK_URL="$webhook"
+SECRET="$mkey"
 
 # 定义检查关键词
 KEYWORDS=("Success")
+# 特定日志消息关键词
+CRITICAL_KEYWORD="cosmos/cosmos-sdk@"
+CRITICAL_COUNT=0  # 追踪特定日志的出现次数
 # 定义检查时间段（秒）每次执行时查询60秒内的日志有没有出现过关键词
 CHECK_INTERVAL=60
 # 定义脚本运行间隔时间（秒），脚本每60秒执行一次
@@ -17,28 +20,28 @@ LOG_FILE="/root/monitor.log"
 
 # 计算签名
 calculate_signature() {
-    local timestamp=$(date "+%s%3N")
-    local secret="$SECRET"
-    local string_to_sign="${timestamp}\n${secret}"
-    local sign=$(echo -ne "${string_to_sign}" | openssl dgst -sha256 -hmac "${secret}" -binary | base64)
-    echo "${timestamp}&${sign}"
+    local timestamp=\$(date "+%s%3N")
+    local secret="\$SECRET"
+    local string_to_sign="\${timestamp}\n\${secret}"
+    local sign=\$(echo -ne "\${string_to_sign}" | openssl dgst -sha256 -hmac "\${secret}" -binary | base64)
+    echo "\${timestamp}&\${sign}"
 }
 
 # 发送钉钉消息
 send_dingtalk_message() {
-    local message=$1
-    local sign=$(calculate_signature)
-    local url="${WEBHOOK_URL}&timestamp=$(echo ${sign} | cut -d'&' -f1)&sign=$(echo ${sign} | cut -d'&' -f2)"
+    local message=\$1
+    local sign=\$(calculate_signature)
+    local url="\${WEBHOOK_URL}&timestamp=\$(echo \${sign} | cut -d'&' -f1)&sign=\$(echo \${sign} | cut -d'&' -f2)"
 
     # 添加当前时间到消息内容中
-    local current_time=$(TZ="Asia/Shanghai" date "+%Y-%m-%d %H:%M:%S")
-    local message_with_time="${current_time} - 替换成你的节点名称 - ${message}"
+    local current_time=\$(TZ="Asia/Shanghai" date "+%Y-%m-%d %H:%M:%S")
+    local message_with_time="\${current_time} - $id - \${message}"
 
-    echo "发送钉钉消息: ${message_with_time}" >> "$LOG_FILE"
+    echo "发送钉钉消息: \${message_with_time}" >> "\$LOG_FILE"
 
-    curl -s -X POST "${url}" \
+    curl -s -X POST "\${url}" \
         -H "Content-Type: application/json" \
-        -d "{\"msgtype\": \"text\", \"text\": {\"content\": \"${message_with_time}\"}}"
+        -d "{\"msgtype\": \"text\", \"text\": {\"content\": \"\${message_with_time}\"}}"
 }
 
 # 每天固定时间报告
@@ -51,59 +54,76 @@ daily_report() {
     fi
 }
 
-LAST_EXTENDED_CHECK=$(date +%s)
+
+# 初始化上次检查时间 简单理解就是上次出现success的时间（脚本执行时查到有日志的时间，和当前时间比较超过EXTENDED_CHECK_INTERVAL就重启）
+LAST_EXTENDED_CHECK=\$(date +%s)
+# 重启标识把，查到有succes就重置，重启就会+1 直到重启三次就执行回滚
 RESTART_COUNT=0
 
 while true; do
-    echo "开始查询" >> "$LOG_FILE"
-    current_time=$(TZ="Asia/Shanghai" date "+%Y-%m-%d %H:%M:%S")
-    echo "$current_time - 开始查询" >> "$LOG_FILE"
+    echo "开始查询" >> "\$LOG_FILE"
+    current_time=\$(TZ="Asia/Shanghai" date "+%Y-%m-%d %H:%M:%S")
+    echo "\$current_time - 开始查询" >> "\$LOG_FILE"
 
     # 检查日志内容
     MATCH_FOUND=0
-    LOGS=$(journalctl -u tracksd -o cat --since "${CHECK_INTERVAL} seconds ago" --until "now")
+    LOGS=\$(journalctl -u tracksd -o cat --since "\${CHECK_INTERVAL} seconds ago" --until "now")
 
-    if [ -z "$LOGS" ]; then
+    if [ -z "\$LOGS" ]; then
         # 如果没有任何日志输出，则直接发送消息
         MESSAGE="No log entries found in the last check interval"
-        echo "$current_time - $MESSAGE" >> "$LOG_FILE"
-        send_dingtalk_message "$MESSAGE"
+        echo "\$current_time - \$MESSAGE" >> "\$LOG_FILE"
+        send_dingtalk_message "\$MESSAGE"
     else
-        echo "$current_time - 检查到的日志:" >> "$LOG_FILE"
-        echo "$LOGS" >> "$LOG_FILE"
+        echo "\$current_time - 检查到的日志:" >> "\$LOG_FILE"
+        echo "\$LOGS" >> "\$LOG_FILE"
         while IFS= read -r line; do
-            MESSAGE="$line"
-            for keyword in "${KEYWORDS[@]}"; do
-                if echo "$MESSAGE" | grep -q "$keyword"; then
+            MESSAGE="\$line"
+            for keyword in "\${KEYWORDS[@]}"; do
+                if echo "\$MESSAGE" | grep -q "\$keyword"; then
                     MATCH_FOUND=1
-                    echo "$current_time - 找到匹配的关键词: $keyword" >> "$LOG_FILE"
-                    LAST_EXTENDED_CHECK=$(date +%s) # 更新上次找到关键词的时间
+                    echo "\$current_time - 找到匹配的关键词: \$keyword" >> "\$LOG_FILE"
+                    LAST_EXTENDED_CHECK=\$(date +%s) # 更新上次找到关键词的时间
                     RESTART_COUNT=0 # 重置重启计数器
                     break 2
                 fi
             done
-        done <<< "$LOGS"
+
+            # 检查特定日志消息
+            if echo "$MESSAGE" | grep -q "$CRITICAL_KEYWORD"; then
+                CRITICAL_COUNT=$((CRITICAL_COUNT + 1))
+                echo "$current_time - 特定日志消息出现次数: $CRITICAL_COUNT" >> "$LOG_FILE"
+                if [ $CRITICAL_COUNT -ge 3 ]; then
+                    # 执行特定操作
+                    sudo systemctl stop tracksd
+                    /data/airchains/tracks/build/tracks rollback
+                    systemctl restart tracksd
+                    send_dingtalk_message "特定错误累计出现三次，已执行重启"
+                    CRITICAL_COUNT=0  # 重置计数器
+                fi
+            fi
+        done <<< "\$LOGS"
 
         # 如果未找到匹配的日志行，则发送钉钉消息
-        if [ $MATCH_FOUND -eq 0 ]; then
+        if [ \$MATCH_FOUND -eq 0 ]; then
             MESSAGE="No 'Successfully' or 'Success' found in the last check interval"
-            echo "$current_time - $MESSAGE" >> "$LOG_FILE"
-            send_dingtalk_message "$MESSAGE"
+            echo "\$current_time - \$MESSAGE" >> "\$LOG_FILE"
+            send_dingtalk_message "\$MESSAGE"
         fi
     fi
 
     # 检查是否超过180秒没有找到关键词
-    current_timestamp=$(date +%s)
-    time_diff=$((current_timestamp - LAST_EXTENDED_CHECK))
-    if [ $time_diff -ge $EXTENDED_CHECK_INTERVAL ]; then
-        echo "$current_time - 超过180秒没有找到关键词，执行重启命令" >> "$LOG_FILE"
+    current_timestamp=\$(date +%s)
+    time_diff=\$((current_timestamp - LAST_EXTENDED_CHECK))
+    if [ \$time_diff -ge \$EXTENDED_CHECK_INTERVAL ]; then
+        echo "\$current_time - 超过180秒没有找到关键词，执行重启命令" >> "\$LOG_FILE"
         
         # 增加重启计数器
-        RESTART_COUNT=$((RESTART_COUNT + 1))
+        RESTART_COUNT=\$((RESTART_COUNT + 1))
         
-        if [ $RESTART_COUNT -lt 3 ]; then
+        if [ \$RESTART_COUNT -lt 3 ]; then
             systemctl restart tracksd
-            send_dingtalk_message "超过180秒没有找到关键词，执行重启命令 (第${RESTART_COUNT}次)"
+            send_dingtalk_message "超过180秒没有找到关键词，执行重启命令 (第\${RESTART_COUNT}次)"
         else
             # 连续三次重启后执行特定操作
             sudo systemctl stop tracksd
@@ -116,11 +136,9 @@ while true; do
             RESTART_COUNT=0 # 重置重启计数器
         fi
         
-        LAST_EXTENDED_CHECK=$(date +%s) # 重置检查时间
+        LAST_EXTENDED_CHECK=\$(date +%s) # 重置检查时间
     fi
 
-    daily_report  # 调用每日报告函数
-
     # 等待一段时间后再次检查
-    sleep $SCRIPT_INTERVAL
+    sleep \$SCRIPT_INTERVAL
 done
