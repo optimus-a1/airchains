@@ -391,7 +391,7 @@ transaction = {
 signed_txn = web3.eth.account.sign_transaction(transaction, sender_private_key)
 
 # 发送交易
-tx_hash = web3.eth.send_raw_transaction(signed_txn.rawTransaction)
+tx_hash = web3.eth.send_raw_transaction(signed_txn.raw_transaction)
 
 # 等待交易确认
 tx_receipt = web3.eth.wait_for_transaction_receipt(tx_hash)
